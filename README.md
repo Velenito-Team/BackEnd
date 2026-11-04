@@ -23,9 +23,9 @@ la caja, los pedidos a proveedores, los fiados y la contabilidad básica.
 
 ## Tecnologías
 
-- **Spring Boot**: desarrollo del backend y la API REST.
+- **Spring Boot 4.1.2**: desarrollo del backend y la API REST.
 - **MongoDB**: almacenamiento de la información del sistema.
-- **Java**: lenguaje de programación.
+- **Java 27**: lenguaje de programación.
 
 ## Alcance
 
