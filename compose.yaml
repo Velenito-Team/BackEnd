@@ -8,4 +8,6 @@ services:
       - '8080:8080'
     environment:
 
-      MONGODB_URI: ${MONGODB_URI:-mongodb://root:secret@host.docker.internal:27017/el_velenito?authSource=admin}
+      MONGODB_URI: ${MONGODB_URI:?Define MONGODB_URI en .env o en tu terminal}
+      VELENITO_POS_USER: ${VELENITO_POS_USER:-}
+      VELENITO_RECEIPT_SECRET: ${VELENITO_RECEIPT_SECRET:-}

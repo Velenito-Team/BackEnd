@@ -2,6 +2,10 @@ package co.edu.udistrital.backend.model;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.text.Normalizer;
+import java.util.Locale;
+import org.springframework.data.mongodb.core.mapping.Field;
+import org.springframework.data.mongodb.core.mapping.FieldType;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -15,11 +19,15 @@ public class Product {
     private String nombreNormalizado;
     private String categoria;
     private String categoriaNormalizada;
+    @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal precioCompra;
+    @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal precioVenta;
     private Unit unidad;
     private boolean fraccionable;
+    @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal stock;
+    @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal umbralMinimo;
     private boolean activo = true;
     private Instant creadoEn;
@@ -42,7 +50,9 @@ public class Product {
     }
 
     private static String normalize(String value) {
-        return value == null ? null : value.trim().toLowerCase();
+        return value == null ? null
+                : Normalizer.normalize(value, Normalizer.Form.NFC).strip().replaceAll("(?U)\\s+", " ")
+                        .toLowerCase(Locale.ROOT);
     }
 
     public String getId() {
