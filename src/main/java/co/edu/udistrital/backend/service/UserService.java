@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import java.util.List;
 
 @Service
 public class UserService {
@@ -19,7 +20,9 @@ public class UserService {
     }
 
     public record CreateRequest(String nombre, String usuario, String contrasena, Role rol) { }
-    public record UserView(String id, String nombre, String usuario, Role rol) { }
+    public record UserView(String id, String nombre, String usuario, Role rol, boolean activo) { }
+    public record ActiveRequest(boolean activo) { }
+    public record RoleRequest(Role rol) { }
 
     public UserView create(CreateRequest request) {
         if (request == null || blank(request.nombre()) || blank(request.usuario())
@@ -44,8 +47,40 @@ public class UserService {
                         "La sesión ya no es válida."));
     }
 
+    public List<UserView> list() {
+        return repository.findAllByOrderByUsuarioNormalizadoAsc().stream().map(UserService::toView).toList();
+    }
+
+    public UserView setActive(String id, boolean active) {
+        User user = findUser(id);
+        if (!active && user.isActivo() && user.getRol() == Role.administrador
+                && repository.countByRolAndActivoTrue(Role.administrador) <= 1)
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "No puedes desactivar al Ãºltimo administrador activo.");
+        user.setActivo(active);
+        return toView(repository.save(user));
+    }
+
+    public UserView setRole(String id, Role role) {
+        if (role == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El rol es obligatorio.");
+        User user = findUser(id);
+        if (user.isActivo() && user.getRol() == Role.administrador && role != Role.administrador
+                && repository.countByRolAndActivoTrue(Role.administrador) <= 1)
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "No puedes retirar el rol al Ãºltimo administrador activo.");
+        user.setRol(role);
+        return toView(repository.save(user));
+    }
+
     private static UserView toView(User user) {
-        return new UserView(user.getId(), user.getNombre(), user.getUsuario(), user.getRol());
+        return new UserView(user.getId(), user.getNombre(), user.getUsuario(), user.getRol(), user.isActivo());
+    }
+
+    private User findUser(String id) {
+        if (id == null || id.isBlank())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El identificador de usuario es obligatorio.");
+        return repository.findById(id).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado."));
     }
 
     private static boolean blank(String value) {

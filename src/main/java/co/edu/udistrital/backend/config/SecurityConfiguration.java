@@ -81,8 +81,8 @@ public class SecurityConfiguration {
                         .hasAnyAuthority("administrador", "tendero")
                         .requestMatchers("/api/balance/monthly/**", "/api/fixed-expenses/summary/**")
                         .hasAnyAuthority("administrador", "tendero")
-                        .requestMatchers(HttpMethod.POST, "/api/users/**")
-                        .hasAnyAuthority("administrador", "tendero")
+                        .requestMatchers("/api/users/**")
+                        .hasAuthority("administrador")
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll());
         return http.build();
