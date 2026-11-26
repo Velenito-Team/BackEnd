@@ -13,14 +13,18 @@ import org.springframework.web.bind.annotation.*;
 public class WorkspaceController {
     private final SaleHistoryService history;
     private final ReportService reports;
+    private final FixedExpenseService fixedExpenses;
+    private final MonthlyBalanceService balances;
     private final InventoryService inventory;
     private final OperatorService operator;
     private final MongoTemplate mongo;
 
-    public WorkspaceController(SaleHistoryService history, ReportService reports, InventoryService inventory,
-            OperatorService operator, MongoTemplate mongo) {
+    public WorkspaceController(SaleHistoryService history, ReportService reports, FixedExpenseService fixedExpenses,
+            MonthlyBalanceService balances, InventoryService inventory, OperatorService operator, MongoTemplate mongo) {
         this.history = history;
         this.reports = reports;
+        this.fixedExpenses = fixedExpenses;
+        this.balances = balances;
         this.inventory = inventory;
         this.operator = operator;
         this.mongo = mongo;
@@ -38,6 +42,16 @@ public class WorkspaceController {
             @RequestParam(required = false) String metodo, @RequestParam(required = false) String estado,
             @RequestParam(required = false) String productoId) {
         return reports.between(desde, hasta, metodo, estado, productoId);
+    }
+
+    @GetMapping("/fixed-expenses/summary")
+    public FixedExpenseService.MonthlySummary fixedExpenseSummary(@RequestParam String mes) {
+        return fixedExpenses.summary(mes);
+    }
+
+    @GetMapping("/balance/monthly")
+    public MonthlyBalanceService.Balance monthlyBalance(@RequestParam String mes) {
+        return balances.monthly(mes);
     }
 
     @PostMapping("/sales/{id}/receipt")
