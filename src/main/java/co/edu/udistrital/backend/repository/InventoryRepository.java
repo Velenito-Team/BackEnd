@@ -23,7 +23,8 @@ public class InventoryRepository {
     private final MongoTemplate mongo;
     public InventoryRepository(MongoClient client, MongoTemplate mongo) { this.client = client; this.mongo = mongo; }
 
-    public String receive(ObjectId productId, BigDecimal quantity, BigDecimal cost, ObjectId actor, UUID key, String hash) {
+    public String receive(ObjectId productId, BigDecimal quantity, BigDecimal cost, ObjectId providerId,
+            ObjectId actor, UUID key, String hash) {
         ObjectId receptionId = new ObjectId();
         Date now = new Date();
         try (var session = client.startSession()) {
@@ -43,8 +44,10 @@ public class InventoryRepository {
                 Document line = new Document("productoId", productId).append("nombre", product.getString("nombre"))
                         .append("unidad", product.getString("unidad")).append("cantidad", new Decimal128(quantity))
                         .append("costoUnitario", new Decimal128(cost));
-                mongo.getCollection("recepciones").insertOne(session, new Document("_id", receptionId)
-                        .append("lineas", List.of(line)).append("por", actor).append("fecha", now));
+                Document reception = new Document("_id", receptionId).append("lineas", List.of(line))
+                        .append("por", actor).append("fecha", now);
+                if (providerId != null) reception.append("proveedorId", providerId);
+                mongo.getCollection("recepciones").insertOne(session, reception);
                 operations.insertOne(session, new Document("por", actor).append("tipo", "recepcion")
                         .append("clave", key.toString()).append("solicitudHash", hash)
                         .append("resultadoId", receptionId).append("fecha", now));

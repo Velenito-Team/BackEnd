@@ -1,6 +1,7 @@
 package co.edu.udistrital.backend.model;
 
 import java.time.Instant;
+import org.bson.types.ObjectId;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -13,13 +14,13 @@ public class Provider {
     private String nombreNormalizado;
     private String nombre;
     private String telefono;
-    private String por;
+    private ObjectId por;
     private Instant fecha;
 
     public Provider() {
     }
 
-    public Provider(String nombre, String telefono, String por) {
+    public Provider(String nombre, String telefono, ObjectId por) {
         this.nombre = nombre;
         this.nombreNormalizado = nombre.trim().toLowerCase();
         this.telefono = telefono;
@@ -60,11 +61,11 @@ public class Provider {
         telefono = v;
     }
 
-    public String getPor() {
+    public ObjectId getPor() {
         return por;
     }
 
-    public void setPor(String v) {
+    public void setPor(ObjectId v) {
         por = v;
     }
 

@@ -77,6 +77,10 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/api/invoices/receipt/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/cash-closings/open")
                         .hasAuthority("administrador")
+                        .requestMatchers(HttpMethod.POST, "/api/providers/**")
+                        .hasAuthority("administrador")
+                        .requestMatchers(HttpMethod.GET, "/api/providers/**")
+                        .hasAnyAuthority("administrador", "tendero", "cajero")
                         .requestMatchers("/api/reports/**", "/api/sales/**", "/api/balance/**",
                                 "/api/cash-closings/**", "/api/expenses/**", "/api/fixed-expenses/**",
                                 "/api/inventory/receipts/**")

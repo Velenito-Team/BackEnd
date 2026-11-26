@@ -18,19 +18,23 @@ public class InventoryService {
         this.operator = operator;
     }
 
-    public record Entry(String productoId, BigDecimal cantidad, BigDecimal costoUnitario) { }
+    public record Entry(String productoId, BigDecimal cantidad, BigDecimal costoUnitario, String proveedorId) { }
 
     public String receive(Entry entry, UUID key) {
         if (entry == null || key == null || entry.productoId() == null || !ObjectId.isValid(entry.productoId())
                 || entry.cantidad() == null || entry.cantidad().signum() <= 0
                 || entry.cantidad().stripTrailingZeros().scale() > 3 || entry.costoUnitario() == null
-                || entry.costoUnitario().signum() <= 0)
+                || entry.costoUnitario().signum() <= 0
+                || (entry.proveedorId() != null && !entry.proveedorId().isBlank()
+                    && !ObjectId.isValid(entry.proveedorId())))
             throw invalid("Indica cantidad y costo positivos.");
         String hash = SaleService.sha256(entry.productoId() + ":" + entry.cantidad().stripTrailingZeros()
                 + ":" + entry.costoUnitario().stripTrailingZeros());
         try {
+            ObjectId providerId = entry.proveedorId() == null || entry.proveedorId().isBlank()
+                    ? null : new ObjectId(entry.proveedorId());
             return repository.receive(new ObjectId(entry.productoId()), entry.cantidad(), entry.costoUnitario(),
-                    operator.id(), key, hash);
+                    providerId, operator.id(), key, hash);
         } catch (IllegalArgumentException error) {
             throw invalid(error.getMessage());
         }
