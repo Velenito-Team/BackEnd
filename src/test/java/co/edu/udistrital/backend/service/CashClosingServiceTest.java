@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.eq;
 import co.edu.udistrital.backend.service.CashClosingService.PaymentTotals;
 import co.edu.udistrital.backend.service.CashClosingService.Summary;
 import co.edu.udistrital.backend.repository.AuditRepository;
@@ -71,6 +72,52 @@ class CashClosingServiceTest {
         assertEquals("cuadrada", result.resultado());
         verify(closings).save(any(Document.class));
         verify(days).close(any(ObjectId.class), any(ObjectId.class));
+    }
+
+    @Test
+    void opensDayWithNonNegativeBase() {
+        ObjectId actor = new ObjectId();
+        ObjectId cashDay = new ObjectId();
+        when(operator.current()).thenReturn(new Document("_id", actor).append("rol", "administrador"));
+        when(days.find("01", "2026-11-27")).thenReturn(Optional.empty());
+        when(days.create(eq(actor), eq("01"), eq("2026-11-27"), eq(25000L), any(java.util.Date.class)))
+                .thenReturn(new Document("_id", cashDay));
+
+        CashClosingService service = new CashClosingService(closings, days, movements, creditSales, audits, operator);
+        var result = service.open(new CashClosingService.OpenRequest("2026-11-27", "01", 25000));
+
+        assertEquals(25000, result.base());
+        verify(days).create(eq(actor), eq("01"), eq("2026-11-27"), eq(25000L), any(java.util.Date.class));
+    }
+
+    @Test
+    void rejectsDuplicateOpening() {
+        when(operator.current()).thenReturn(new Document("_id", new ObjectId()).append("rol", "administrador"));
+        when(days.find("01", "2026-11-27")).thenReturn(Optional.of(new Document("_id", new ObjectId())));
+
+        CashClosingService service = new CashClosingService(closings, days, movements, creditSales, audits, operator);
+        var error = org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> service.open(new CashClosingService.OpenRequest("2026-11-27", "01", 0)));
+
+        assertEquals(409, error.getStatusCode().value());
+    }
+
+    @Test
+    void closesWithoutOpeningUsingZeroBase() {
+        ObjectId actor = new ObjectId();
+        ObjectId cashDay = new ObjectId();
+        Document created = new Document("_id", cashDay).append("estado", "abierta");
+        when(operator.id()).thenReturn(actor);
+        when(days.find("01", "2026-11-28")).thenReturn(Optional.empty());
+        when(days.create(eq(actor), eq("01"), eq("2026-11-28"), any(java.util.Date.class))).thenReturn(created);
+        when(movements.findByCashDayAndDay(cashDay, "2026-11-28")).thenReturn(java.util.List.of());
+        when(creditSales.findConfirmedByCashDayAndDay(cashDay, "2026-11-28")).thenReturn(java.util.List.of());
+
+        CashClosingService service = new CashClosingService(closings, days, movements, creditSales, audits, operator);
+        var result = service.close(new CashClosingService.CloseRequest("2026-11-28", "01", 0));
+
+        assertEquals(0, result.resumen().base());
     }
 
     private static String result(long difference) {

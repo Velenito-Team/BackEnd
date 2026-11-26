@@ -30,9 +30,13 @@ public class CashDayRepository {
     }
 
     public Document create(ObjectId actor, String register, String day, Date openingDate) {
+        return create(actor, register, day, 0L, openingDate);
+    }
+
+    public Document create(ObjectId actor, String register, String day, long base, Date openingDate) {
         Document document = new Document("_id", new ObjectId()).append("caja", register)
                 .append("dia", day).append("estado", "abierta").append("version", 0L)
-                .append("apertura", new Document("por", actor).append("fecha", openingDate).append("base", 0L));
+                .append("apertura", new Document("por", actor).append("fecha", openingDate).append("base", base));
         mongo.getCollection(COLLECTION).insertOne(document);
         return document;
     }

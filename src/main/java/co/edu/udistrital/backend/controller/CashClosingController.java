@@ -28,6 +28,12 @@ public class CashClosingController {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.close(request));
     }
 
+    @PostMapping("/open")
+    public ResponseEntity<CashClosingService.OpenedCashDay> open(
+            @RequestBody CashClosingService.OpenRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.open(request));
+    }
+
     @PostMapping("/{id}/rectifications")
     public CashClosingService.Closing rectify(@PathVariable String id,
             @RequestBody CashClosingService.RectificationRequest request) {

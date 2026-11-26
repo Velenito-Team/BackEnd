@@ -39,6 +39,12 @@ public class CashClosingService {
     public record CloseRequest(String dia, String caja, long efectivoContado) {
     }
 
+    public record OpenRequest(String dia, String caja, long base) {
+    }
+
+    public record OpenedCashDay(String id, String caja, String dia, long base) {
+    }
+
     public record RectificationRequest(long efectivoContado, String motivo) {
     }
 
@@ -55,6 +61,25 @@ public class CashClosingService {
 
     public record Closing(String id, String cajaDiaId, String dia, int revision,
             String estado, String resultado, Summary resumen, String anteriorId, String motivo) {
+    }
+
+    @Transactional
+    public OpenedCashDay open(OpenRequest request) {
+        if (request == null || request.dia() == null || request.base() < 0)
+            throw badRequest("Indica el día y una base de efectivo no negativa.");
+        try { LocalDate.parse(request.dia()); }
+        catch (RuntimeException error) { throw badRequest("El día debe tener formato YYYY-MM-DD."); }
+        Document currentOperator = operator.current();
+        if (!"administrador".equals(currentOperator.getString("rol")))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Solo un administrador puede registrar la apertura de caja.");
+        String register = register(request.caja());
+        if (days.find(register, request.dia()).isPresent())
+            throw conflict("La caja del día ya tiene una apertura registrada.");
+        Document day = days.create(currentOperator.getObjectId("_id"), register, request.dia(),
+                request.base(), new Date());
+        return new OpenedCashDay(day.getObjectId("_id").toHexString(), register,
+                request.dia(), request.base());
     }
 
     @Transactional
