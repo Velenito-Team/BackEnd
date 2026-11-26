@@ -131,7 +131,7 @@ public class CashClosingService {
             PaymentTotals expenses, long creditSales, long counted) {
         long expected = Math.addExact(Math.subtractExact(Math.addExact(base, sales.efectivo()), expenses.efectivo()), payments.efectivo());
         long difference = Math.subtractExact(counted, expected);
-        long operating = Math.subtractExact(Math.addExact(Math.addExact(sales.total(), payments.total()), creditSales), expenses.total());
+        long operating = Math.subtractExact(Math.addExact(sales.total(), payments.total()), expenses.total());
         return new Summary(base, sales, payments, expenses, creditSales, expected, counted, difference, operating);
     }
 
