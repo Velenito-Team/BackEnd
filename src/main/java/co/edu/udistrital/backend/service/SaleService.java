@@ -17,6 +17,7 @@ import java.util.Date;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import javax.crypto.Mac;
@@ -26,6 +27,8 @@ import org.bson.types.Decimal128;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import co.edu.udistrital.backend.repository.SaleRepository;
@@ -76,7 +79,8 @@ public class SaleService {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "MongoDB debe estar en un replica set para confirmar ventas y actualizar inventario.");
         }
-        if (operator.isBlank() || receiptSecret.getBytes(UTF_8).length < 32) {
+        String operatorUsername = currentOperatorUsername();
+        if (operatorUsername.isBlank() || receiptSecret.getBytes(UTF_8).length < 32) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Configura el usuario operador y el secreto del comprobante en el servidor.");
         }
@@ -87,7 +91,8 @@ public class SaleService {
         var sales = repository.collection("ventas");
         var ops = repository.collection("operaciones");
         var cashier = repository.collection("usuarios").find(and(eq("activo", true),
-                eq("usuarioNormalizado", operator), in("rol", "administrador", "cajero"))).first();
+                eq("usuarioNormalizado", operatorUsername),
+                in("rol", "administrador", "tendero", "cajero"))).first();
         if (cashier == null) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "El operador de caja no está activo.");
         }
@@ -298,6 +303,15 @@ public class SaleService {
 
     private static ResponseStatusException badRequest(String message) {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+    }
+
+    private String currentOperatorUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated()
+                && !"anonymousUser".equals(authentication.getName())
+                && authentication.getName() != null && !authentication.getName().isBlank())
+            return authentication.getName().trim().toLowerCase(Locale.ROOT);
+        return operator == null ? "" : operator.trim().toLowerCase(Locale.ROOT);
     }
 
     private static ResponseStatusException saleConflict() {

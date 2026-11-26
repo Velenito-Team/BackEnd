@@ -1,11 +1,15 @@
 package co.edu.udistrital.backend.repository;
 
 import static com.mongodb.client.model.Filters.exists;
+import static com.mongodb.client.model.Filters.eq;
+import static com.mongodb.client.model.Filters.in;
 import static com.mongodb.client.model.Sorts.ascending;
+import static com.mongodb.client.model.Sorts.descending;
 import com.mongodb.client.MongoClient;
 import java.util.ArrayList;
 import java.util.List;
 import org.bson.Document;
+import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -17,6 +21,14 @@ public class CreditRepository {
     public List<Document> findAuthorizedCustomers() {
         return mongo.getCollection("clientesFiado").find(exists("autorizacionVigenteId"))
                 .sort(ascending("nombreNormalizado")).into(new ArrayList<>());
+    }
+    public List<Document> findDebtsByCustomer(ObjectId customerId) {
+        return mongo.getCollection("deudasFiado").find(eq("clienteId", customerId))
+                .sort(descending("fecha")).into(new ArrayList<>());
+    }
+    public List<Document> findSalesByIds(List<ObjectId> saleIds) {
+        if (saleIds.isEmpty()) return List.of();
+        return mongo.getCollection("ventas").find(in("_id", saleIds)).into(new ArrayList<>());
     }
     public void saveCustomerWithAuthorization(Document customer, Document authorization) {
         try (var session = client.startSession()) {
