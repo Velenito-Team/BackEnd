@@ -1,6 +1,11 @@
 package co.edu.udistrital.backend.repository;
 
 import static com.mongodb.client.model.Filters.eq;
+import static com.mongodb.client.model.Filters.and;
+import static com.mongodb.client.model.Filters.or;
+import static com.mongodb.client.model.Filters.lte;
+import static com.mongodb.client.model.Filters.gte;
+import static com.mongodb.client.model.Filters.exists;
 import static com.mongodb.client.model.Sorts.ascending;
 
 import java.util.ArrayList;
@@ -30,5 +35,12 @@ public class FixedExpenseRepository {
     public List<Document> findByMonth(String month) {
         return mongo.getCollection("gastosFijos").find(eq("mes", month))
                 .sort(ascending("conceptoNormalizado")).into(new ArrayList<>());
+    }
+
+    public List<Document> findExpectedConcepts(String month) {
+        return mongo.getCollection("conceptosGastoFijo").find(and(
+                lte("desdeMes", month),
+                or(exists("hastaMes", false), gte("hastaMes", month))))
+                .into(new ArrayList<>());
     }
 }

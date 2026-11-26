@@ -54,6 +54,13 @@ public class WorkspaceController {
         return balances.monthly(mes);
     }
 
+    @GetMapping(value = "/balance/monthly/export", produces = "text/csv")
+    public org.springframework.http.ResponseEntity<String> exportMonthlyBalance(@RequestParam String mes) {
+        return org.springframework.http.ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=balance-" + mes + ".csv")
+                .body(balances.exportCsv(mes));
+    }
+
     @PostMapping("/sales/{id}/receipt")
     public SaleService.CreatedReceipt receipt(@PathVariable String id) {
         return history.open(id);
