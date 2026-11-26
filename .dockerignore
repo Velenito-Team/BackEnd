@@ -1,0 +1,10 @@
+.git
+.env
+.env.*
+target
+dist
+.vscode
+.idea
+*.log
+*.zip
+*.tgz
