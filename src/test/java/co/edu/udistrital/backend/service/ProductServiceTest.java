@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import co.edu.udistrital.backend.model.Product;
 import co.edu.udistrital.backend.model.Unit;
 import co.edu.udistrital.backend.repository.ProductRepository;
+import co.edu.udistrital.backend.repository.AuditRepository;
 import java.math.BigDecimal;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -19,15 +20,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ProductServiceTest {
     @Mock ProductRepository repository;
-    @Mock org.springframework.data.mongodb.core.MongoTemplate mongo;
-    @Mock org.springframework.data.mongodb.core.convert.MongoConverter converter;
     @Mock OperatorService operator;
+    @Mock AuditRepository audits;
     @InjectMocks ProductService service;
 
     @Test
     void createsAValidProduct() {
         Product product = new Product("Arroz", "Granos", BigDecimal.ONE, BigDecimal.TEN, Unit.kg);
-        when(mongo.getConverter()).thenReturn(converter);
         when(operator.id()).thenReturn(new org.bson.types.ObjectId());
         when(repository.save(any(Product.class))).thenAnswer(invocation -> {
             Product saved = invocation.getArgument(0);
@@ -43,7 +42,6 @@ class ProductServiceTest {
     void deletesProductSoftly() {
         Product product = new Product("Pan", "Panadería", BigDecimal.ONE, BigDecimal.TEN, Unit.unidad);
         product.setId(new org.bson.types.ObjectId().toHexString());
-        when(mongo.getConverter()).thenReturn(converter);
         when(operator.id()).thenReturn(new org.bson.types.ObjectId());
         when(repository.findById("1")).thenReturn(Optional.of(product));
         service.delete("1");
