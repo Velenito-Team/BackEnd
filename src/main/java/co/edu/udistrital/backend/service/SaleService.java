@@ -3,8 +3,6 @@ package co.edu.udistrital.backend.service;
 import co.edu.udistrital.backend.model.PaymentMethod;
 import com.mongodb.MongoCommandException;
 import com.mongodb.MongoWriteException;
-import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.FindOneAndUpdateOptions;
 import com.mongodb.client.model.ReturnDocument;
 import java.math.BigDecimal;
@@ -19,6 +17,7 @@ import java.util.Date;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import javax.crypto.Mac;
@@ -27,10 +26,12 @@ import org.bson.Document;
 import org.bson.types.Decimal128;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import co.edu.udistrital.backend.repository.SaleRepository;
 
 import static com.mongodb.client.model.Filters.*;
 import static com.mongodb.client.model.Updates.*;
@@ -40,16 +41,14 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 public class SaleService {
     private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
     private static final String STORE = "Tienda El Veleñito";
-    private final MongoClient client;
-    private final MongoTemplate template;
+    private final SaleRepository repository;
     private final String operator;
     private final String receiptSecret;
 
-    public SaleService(MongoClient client, MongoTemplate template,
+    public SaleService(SaleRepository repository,
             @Value("${velenito.pos.user:}") String operator,
             @Value("${velenito.receipt.secret:}") String receiptSecret) {
-        this.client = client;
-        this.template = template;
+        this.repository = repository;
         this.operator = operator;
         this.receiptSecret = receiptSecret;
     }
@@ -74,13 +73,14 @@ public class SaleService {
 
     public CreatedReceipt saveInvoice(InvoiceRequest sale, UUID idempotencyKey) {
         var quantities = quantities(sale);
-        var db = template.getDb();
+        var db = repository.database();
         var hello = db.runCommand(new Document("hello", 1));
         if (!hello.containsKey("setName") && !"isdbgrid".equals(hello.getString("msg"))) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "MongoDB debe estar en un replica set para confirmar ventas y actualizar inventario.");
         }
-        if (operator.isBlank() || receiptSecret.getBytes(UTF_8).length < 32) {
+        String operatorUsername = currentOperatorUsername();
+        if (operatorUsername.isBlank() || receiptSecret.getBytes(UTF_8).length < 32) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Configura el usuario operador y el secreto del comprobante en el servidor.");
         }
@@ -88,10 +88,11 @@ public class SaleService {
         final String requestHash = sha256(sale.metodo() + ":"
                 + (cashReceived == null ? "" : cashReceived)
                 + ":" + sale.clienteId() + ":" + quantities);
-        var sales = db.getCollection("ventas");
-        var ops = db.getCollection("operaciones");
-        var cashier = db.getCollection("usuarios").find(and(eq("activo", true),
-                eq("usuarioNormalizado", operator), in("rol", "administrador", "cajero"))).first();
+        var sales = repository.collection("ventas");
+        var ops = repository.collection("operaciones");
+        var cashier = repository.collection("usuarios").find(and(eq("activo", true),
+                eq("usuarioNormalizado", operatorUsername),
+                in("rol", "administrador", "tendero", "cajero"))).first();
         if (cashier == null) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "El operador de caja no está activo.");
         }
@@ -102,13 +103,13 @@ public class SaleService {
         ObjectId saleId = new ObjectId();
         String token = token(saleId);
         var dayKey = and(eq("caja", "01"), eq("dia", day));
-        var days = db.getCollection("cajasDia");
-        try (var session = client.startSession()) {
+        var days = repository.collection("cajasDia");
+        try (var session = repository.client().startSession()) {
             try {
                 return session.withTransaction(() -> {
                     var existing = ops.find(session, key).first();
                     if (existing != null)
-                        return existingReceipt(db, existing, requestHash);
+                        return existingReceipt(existing, requestHash);
                     var cashDay = days.findOneAndUpdate(session, dayKey,
                             combine(setOnInsert("caja", "01"), setOnInsert("dia", day),
                                     setOnInsert("estado", "abierta"), inc("version", 1)),
@@ -116,7 +117,7 @@ public class SaleService {
                     if (!"abierta".equals(cashDay.getString("estado"))) {
                         throw new ResponseStatusException(HttpStatus.CONFLICT, "La caja del día ya está cerrada.");
                     }
-                    var products = db.getCollection("productos");
+                    var products = repository.collection("productos");
                     var lines = new ArrayList<Document>();
                     long total = 0;
                     for (var entry : quantities.entrySet()) {
@@ -163,30 +164,30 @@ public class SaleService {
                     }
                     if (sale.metodo() == PaymentMethod.fiado) {
                         var customerId = new ObjectId(sale.clienteId());
-                        var customer = db.getCollection("clientesFiado").find(session, eq("_id", customerId)).first();
+                        var customer = repository.collection("clientesFiado").find(session, eq("_id", customerId)).first();
                         if (customer == null || customer.getObjectId("autorizacionVigenteId") == null)
                             throw badRequest("El cliente requiere autorización vigente.");
-                        var authorization = db.getCollection("autorizacionesDatos").find(session,
+                        var authorization = repository.collection("autorizacionesDatos").find(session,
                                 and(eq("_id", customer.getObjectId("autorizacionVigenteId")),
                                         eq("clienteId", customerId), eq("decision", "concedida")))
                                 .first();
                         if (authorization == null)
                             throw badRequest("La autorización del cliente no está vigente.");
-                        db.getCollection("clientesFiado").updateOne(session, eq("_id", customerId),
+                        repository.collection("clientesFiado").updateOne(session, eq("_id", customerId),
                                 inc("saldo", total));
-                        db.getCollection("deudasFiado").insertOne(session, new Document("ventaId", saleId)
+                        repository.collection("deudasFiado").insertOne(session, new Document("ventaId", saleId)
                                 .append("clienteId", customerId).append("importeOriginal", total).append("saldo", total)
                                 .append("estado", total == 0 ? "pagada" : "pendiente").append("fecha", Date.from(now)));
                         record.append("clienteId", customerId);
                     }
                     sales.insertOne(session, record);
                     if (total > 0 && sale.metodo() != PaymentMethod.fiado) {
-                        db.getCollection("movimientosCaja").insertOne(session,
+                        repository.collection("movimientosCaja").insertOne(session,
                                 new Document("cajaDiaId", dayId).append("dia", day).append("por", actor)
                                         .append("fecha", Date.from(now)).append("tipo", "venta").append("medio", method)
                                         .append("monto", total).append("ventaId", saleId));
                     }
-                    db.getCollection("enlacesComprobante").insertOne(session,
+                    repository.collection("enlacesComprobante").insertOne(session,
                             new Document("ventaId", saleId).append("tokenHash", sha256(token))
                                     .append("emitidoEn", Date.from(now))
                                     .append("expiraEn", Date.from(now.plus(30, ChronoUnit.DAYS))));
@@ -201,7 +202,7 @@ public class SaleService {
                 var existing = ops.find(key).first();
                 if (existing == null)
                     throw saleConflict();
-                return existingReceipt(db, existing, requestHash);
+                return existingReceipt(existing, requestHash);
             } catch (MongoCommandException error) {
                 if (error.getCode() == 11000)
                     throw saleConflict();
@@ -216,23 +217,22 @@ public class SaleService {
     public Receipt readReceipt(String token) {
         if (!token.matches("[a-f0-9]{64}"))
             throw missingReceipt();
-        var db = template.getDb();
-        var link = db.getCollection("enlacesComprobante")
+        var link = repository.collection("enlacesComprobante")
                 .find(and(eq("tokenHash", sha256(token)), gt("expiraEn", new Date()))).first();
         if (link == null)
             throw missingReceipt();
-        var sale = db.getCollection("ventas").find(eq("_id", link.getObjectId("ventaId"))).first();
+        var sale = repository.collection("ventas").find(eq("_id", link.getObjectId("ventaId"))).first();
         if (sale == null)
             throw missingReceipt();
         return receipt(sale);
     }
 
-    private CreatedReceipt existingReceipt(MongoDatabase db, Document operation, String requestHash) {
+    private CreatedReceipt existingReceipt(Document operation, String requestHash) {
         if (!requestHash.equals(operation.getString("solicitudHash"))) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "La clave ya se usó para otra venta.");
         }
         ObjectId id = operation.getObjectId("resultadoId");
-        var sale = db.getCollection("ventas").find(eq("_id", id)).first();
+        var sale = repository.collection("ventas").find(eq("_id", id)).first();
         if (sale == null)
             throw missingReceipt();
         return new CreatedReceipt(receipt(sale), token(id));
@@ -305,6 +305,15 @@ public class SaleService {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
 
+    private String currentOperatorUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated()
+                && !"anonymousUser".equals(authentication.getName())
+                && authentication.getName() != null && !authentication.getName().isBlank())
+            return authentication.getName().trim().toLowerCase(Locale.ROOT);
+        return operator == null ? "" : operator.trim().toLowerCase(Locale.ROOT);
+    }
+
     private static ResponseStatusException saleConflict() {
         return new ResponseStatusException(HttpStatus.CONFLICT,
                 "Otra operación actualizó la caja. Reintenta la venta.");
@@ -315,7 +324,7 @@ public class SaleService {
     }
 
     CreatedReceipt renew(ObjectId id, ObjectId actor) {
-        var sale = template.getCollection("ventas").find(eq("_id", id)).first();
+        var sale = repository.collection("ventas").find(eq("_id", id)).first();
         if (sale == null)
             throw missingReceipt();
         if (receiptSecret.getBytes(UTF_8).length < 32)
@@ -323,7 +332,7 @@ public class SaleService {
                     HttpStatus.SERVICE_UNAVAILABLE, "Configura el secreto del comprobante.");
         String accessToken = token(id);
         var now = Instant.now();
-        template.getCollection("enlacesComprobante").updateOne(eq("ventaId", id),
+        repository.collection("enlacesComprobante").updateOne(eq("ventaId", id),
                 combine(set("ventaId", id), set("tokenHash", sha256(accessToken)),
                         set("emitidoEn", Date.from(now)), set("expiraEn", Date.from(now.plus(30, ChronoUnit.DAYS)))),
                 new com.mongodb.client.model.UpdateOptions().upsert(true));

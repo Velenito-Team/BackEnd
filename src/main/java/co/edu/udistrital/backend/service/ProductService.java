@@ -11,14 +11,14 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class ProductService {
     private final ProductRepository repository;
-    private final org.springframework.data.mongodb.core.MongoTemplate mongo;
     private final OperatorService operator;
+    private final co.edu.udistrital.backend.repository.AuditRepository audits;
 
-    public ProductService(ProductRepository repository, org.springframework.data.mongodb.core.MongoTemplate mongo,
-            OperatorService operator) {
+    public ProductService(ProductRepository repository, OperatorService operator,
+            co.edu.udistrital.backend.repository.AuditRepository audits) {
         this.repository = repository;
-        this.mongo = mongo;
         this.operator = operator;
+        this.audits = audits;
     }
 
     public List<Product> findAll() {
@@ -44,7 +44,7 @@ public class ProductService {
         product.setCreadoEn(now);
         product.setActualizadoEn(now);
         Product saved = repository.save(product);
-        audit("crear_producto", saved, null);
+        audits.saveProduct(operator.id(), "crear_producto", saved, null);
         return saved;
     }
 
@@ -62,7 +62,7 @@ public class ProductService {
         data.setCreadoEn(current.getCreadoEn());
         data.setActualizadoEn(java.time.Instant.now());
         Product saved = repository.save(data);
-        audit("editar_producto", saved, current);
+        audits.saveProduct(operator.id(), "editar_producto", saved, current);
         return saved;
     }
 
@@ -74,7 +74,7 @@ public class ProductService {
         product.setActivo(false);
         product.setActualizadoEn(java.time.Instant.now());
         repository.save(product);
-        audit("desactivar_producto", product, null);
+        audits.saveProduct(operator.id(), "desactivar_producto", product, null);
     }
 
     private void validate(Product product) {
@@ -108,19 +108,4 @@ public class ProductService {
         new org.bson.types.Decimal128(product.getStock());
     }
 
-    private void audit(String action, Product saved, Product before) {
-        var after = new org.bson.Document();
-        mongo.getConverter().write(saved, after);
-        var event = new org.bson.Document("por", operator.id()).append("fecha", new java.util.Date())
-                .append("accion", action).append("entidad", "productos")
-                .append("entidadId", new org.bson.types.ObjectId(saved.getId())).append("nuevo", after);
-        if (before != null) {
-            var previous = new org.bson.Document();
-            mongo.getConverter().write(before, previous);
-            event.append("anterior", previous);
-        } else if ("desactivar_producto".equals(action)) {
-            event.append("anterior", new org.bson.Document("activo", true));
-        }
-        mongo.insert(event, "auditoria");
-    }
 }

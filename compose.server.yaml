@@ -1,0 +1,53 @@
+# Self-contained server deployment. Do not combine with compose.yaml:
+# its development port mapping would publish the private API on every interface.
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: el-velenito-backend:${BACKEND_TAG:-server}
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8080:8080'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    environment:
+      MONGODB_URI: ${MONGODB_URI:?Define la conexión MongoDB en .env.server}
+      VELENITO_POS_USER: ${VELENITO_POS_USER:?Define el operador existente en .env.server}
+      VELENITO_RECEIPT_SECRET: ${VELENITO_RECEIPT_SECRET:?Conserva el secreto actual de comprobantes}
+      SERVER_ERROR_INCLUDE_STACKTRACE: never
+      SERVER_ERROR_INCLUDE_MESSAGE: never
+      JAVA_TOOL_OPTIONS: '-XX:MaxRAMPercentage=75.0'
+    user: '10001:10001'
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  comprobantes:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '443:443'
+    environment:
+      COMPROBANTES_DOMAIN: ${COMPROBANTES_DOMAIN:?Define la IP pública o el dominio del servidor}
+    volumes:
+      - ./deploy/${CADDYFILE:-Caddyfile}:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+volumes:
+  caddy_data:
+  caddy_config:

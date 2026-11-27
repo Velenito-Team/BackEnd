@@ -1,11 +1,23 @@
 package co.edu.udistrital.backend.repository;
 
-import co.edu.udistrital.backend.model.*;
-import java.util.List;
-import org.springframework.data.mongodb.repository.MongoRepository;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoDatabase;
+import org.bson.Document;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.stereotype.Repository;
 
-public interface SaleRepository extends MongoRepository<Sale, String> {
-    List<Sale> findByDiaAndEstado(String dia, SaleStatus estado);
+@Repository
+public class SaleRepository {
+    private final MongoClient client;
+    private final MongoTemplate mongo;
 
-    List<Sale> findByCajaDiaIdAndEstado(String cajaDiaId, SaleStatus estado);
+    public SaleRepository(MongoClient client, MongoTemplate mongo) {
+        this.client = client;
+        this.mongo = mongo;
+    }
+
+    public MongoClient client() { return client; }
+    public MongoDatabase database() { return mongo.getDb(); }
+    public MongoCollection<Document> collection(String name) { return mongo.getCollection(name); }
 }

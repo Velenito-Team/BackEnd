@@ -34,3 +34,6 @@ build/
 
 # Configuración local del backend
 .env
+.env.server
+dist/
+deploy/.ssh-local/

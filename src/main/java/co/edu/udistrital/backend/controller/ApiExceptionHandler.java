@@ -6,6 +6,8 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -13,6 +15,18 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    @ExceptionHandler(AuthenticationException.class)
+    ResponseEntity<Map<String, String>> unauthenticated(AuthenticationException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("message", "Usuario o contraseña incorrectos."));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<Map<String, String>> forbidden(AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("message", "Tu rol no tiene permiso para acceder a este módulo."));
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     ResponseEntity<Map<String, String>> business(ResponseStatusException ex) {
         return ResponseEntity.status(ex.getStatusCode()).body(Map.of("message",

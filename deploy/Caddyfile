@@ -1,0 +1,39 @@
+{
+    # Receipt URLs are bearer credentials. Remove the URI from runtime logs too.
+    log default {
+        format filter {
+            wrap json
+            fields {
+                request>uri delete
+            }
+        }
+    }
+}
+
+{$COMPROBANTES_DOMAIN} {
+    header {
+        Cache-Control "no-store"
+        X-Robots-Tag "noindex, nofollow"
+        Referrer-Policy "no-referrer"
+        X-Content-Type-Options "nosniff"
+    }
+
+    @receipt {
+        method GET
+        path_regexp receipt ^/api/invoices/receipt/[a-f0-9]{64}$
+    }
+    handle @receipt {
+        reverse_proxy backend:8080
+    }
+
+    # Never publish product costs, clients, stock mutation, or POS administration.
+    handle {
+        header Content-Type "application/json; charset=utf-8"
+        respond `{"message":"Comprobante no disponible."}` 404
+    }
+
+    handle_errors {
+        header Content-Type "application/json; charset=utf-8"
+        respond `{"message":"Comprobante no disponible."}` {err.status_code}
+    }
+}
