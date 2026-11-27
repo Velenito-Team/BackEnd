@@ -21,6 +21,11 @@ public class CreditController {
         return service.customers();
     }
 
+    @GetMapping("/{clienteId}/credits")
+    public List<CreditService.Credit> credits(@PathVariable String clienteId) {
+        return service.credits(clienteId);
+    }
+
     @PostMapping
     public CreditService.Customer create(@RequestBody CreditService.CustomerRequest request) {
         return service.create(request);
